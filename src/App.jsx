@@ -29,6 +29,7 @@ const QUESTIONS = [
 ];
 
 const SERIF = "'EB Garamond', Georgia, serif";
+const STORAGE_KEY = "flesh-is-weak-journal";
 
 const loadFont = () => {
   if (!document.querySelector("#eb-garamond-link")) {
@@ -39,6 +40,36 @@ const loadFont = () => {
     document.head.appendChild(link);
   }
 };
+
+function loadEntries() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
+  catch { return []; }
+}
+
+function persistEntry(entry) {
+  const entries = loadEntries();
+  const idx = entries.findIndex(e => e.id === entry.id);
+  if (idx >= 0) entries[idx] = entry;
+  else entries.unshift(entry);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+  return [...entries];
+}
+
+function groupByMonth(entries) {
+  const groups = {};
+  entries.forEach(e => {
+    const d = new Date(e.date);
+    const key = d.toLocaleString("default", { month: "long", year: "numeric" });
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(e);
+  });
+  return groups;
+}
+
+function formatDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString("default", { weekday: "long", month: "long", day: "numeric" });
+}
 
 function useTypewriter(text, speed = 22) {
   const [displayed, setDisplayed] = useState("");
@@ -60,6 +91,7 @@ function useTypewriter(text, speed = 22) {
 
 export default function App() {
   const [dark, setDark] = useState(true);
+  const [view, setView] = useState("quiz"); // "quiz" | "journal"
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState({});
   const [selected, setSelected] = useState(null);
@@ -68,6 +100,12 @@ export default function App() {
   const [error, setError] = useState(null);
   const [direction, setDirection] = useState(1);
   const [animating, setAnimating] = useState(false);
+
+  const [entries, setEntries] = useState(loadEntries);
+  const [currentEntryId, setCurrentEntryId] = useState(null);
+  const [note, setNote] = useState("");
+  const [noteSaved, setNoteSaved] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
 
   const RESULT_STEP = QUESTIONS.length;
 
@@ -114,6 +152,11 @@ export default function App() {
     setLoading(true);
     setResult(null);
     setError(null);
+    setNote("");
+    setNoteSaved(false);
+
+    const id = Date.now().toString();
+    setCurrentEntryId(id);
 
     const prompt = `A person is seeking spiritual guidance with this emotional profile:
 - Spirit feels: "${ans.spirit}"
@@ -150,11 +193,28 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
       const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
       parsed.prayerLines = parsed.prayer.split("|").map(s => s.trim()).filter(Boolean);
       setResult(parsed);
+
+      const entry = { id, date: new Date().toISOString(), answers: ans, result: parsed, note: "" };
+      setEntries(persistEntry(entry));
     } catch (e) {
       setError("Something went wrong. Try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const saveNote = () => {
+    if (!currentEntryId) return;
+    const updated = entries.map(e => e.id === currentEntryId ? { ...e, note } : e);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    setEntries(updated);
+    setNoteSaved(true);
+  };
+
+  const updateJournalNote = (entryId, newNote) => {
+    const updated = entries.map(e => e.id === entryId ? { ...e, note: newNote } : e);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    setEntries(updated);
   };
 
   const reset = () => {
@@ -163,15 +223,31 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
     setSelected(null);
     setResult(null);
     setError(null);
+    setNote("");
+    setNoteSaved(false);
+    setCurrentEntryId(null);
   };
 
   const { displayed: verseText, done: verseDone } = useTypewriter(result?.verse || "", 20);
   const { displayed: quoteText, done: quoteDone } = useTypewriter(verseDone ? (result?.theologianQuote || "") : "", 18);
   const { displayed: prayer1, done: p1Done } = useTypewriter(quoteDone ? (result?.prayerLines?.[0] || "") : "", 22);
   const { displayed: prayer2, done: p2Done } = useTypewriter(p1Done ? (result?.prayerLines?.[1] || "") : "", 22);
-  const { displayed: prayer3 } = useTypewriter(p2Done ? (result?.prayerLines?.[2] || "") : "", 22);
+  const { displayed: prayer3, done: p3Done } = useTypewriter(p2Done ? (result?.prayerLines?.[2] || "") : "", 22);
 
   const progress = step < RESULT_STEP ? (step / QUESTIONS.length) * 100 : 100;
+
+  const btnStyle = (active) => ({
+    background: "none",
+    border: `0.5px solid ${active ? accent : chipBorder}`,
+    borderRadius: "20px",
+    padding: "6px 14px",
+    cursor: "pointer",
+    color: active ? accent : fgMuted,
+    fontSize: "0.8rem",
+    fontFamily: SERIF,
+    letterSpacing: "0.04em",
+    transition: "border-color 0.2s, color 0.2s",
+  });
 
   return (
     <div style={{
@@ -187,6 +263,8 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
         @keyframes pulse{0%,100%{opacity:0.4}50%{opacity:1}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
         @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+        textarea:focus { outline: none; }
+        textarea::placeholder { opacity: 0.5; }
       `}</style>
 
       {/* Header */}
@@ -197,360 +275,664 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
         padding: "1.5rem 2rem",
         borderBottom: `0.5px solid ${cardBorder}`,
       }}>
-        <div>
+        <div
+          onClick={() => { setView("quiz"); }}
+          style={{ cursor: "pointer" }}
+        >
           <div style={{ fontSize: "1.2rem", fontWeight: 600, letterSpacing: "0.02em", color: fg }}>
             The Flesh is Weak
           </div>
-          <div style={{ fontSize: "0.88rem", color: fgMuted, marginTop: "1px",  }}>
+          <div style={{ fontSize: "0.88rem", color: fgMuted, marginTop: "1px" }}>
             Matthew 26:41
           </div>
         </div>
-        <button
-          onClick={() => setDark(!dark)}
-          style={{
-            background: "none",
-            border: `0.5px solid ${chipBorder}`,
-            borderRadius: "20px",
-            padding: "6px 14px",
-            cursor: "pointer",
-            color: fgMuted,
-            fontSize: "0.8rem",
-            fontFamily: SERIF,
-            letterSpacing: "0.04em",
-            transition: "border-color 0.2s",
-          }}
-        >
-          {dark ? "light" : "dark"}
-        </button>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <button
+            onClick={() => setView(view === "journal" ? "quiz" : "journal")}
+            style={btnStyle(view === "journal")}
+          >
+            journal {entries.length > 0 ? `(${entries.length})` : ""}
+          </button>
+          <button
+            onClick={() => setDark(!dark)}
+            style={btnStyle(false)}
+          >
+            {dark ? "light" : "dark"}
+          </button>
+        </div>
       </header>
 
       {/* Progress bar */}
-      <div style={{ height: "1px", background: cardBorder }}>
-        <div style={{
-          height: "1px",
-          background: accent,
-          width: `${progress}%`,
-          transition: "width 0.5s ease",
-        }} />
-      </div>
-
-      {/* Main */}
-      <main style={{
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "2.25rem",
-        maxWidth: "600px",
-        margin: "0 auto",
-        width: "100%",
-        boxSizing: "border-box",
-      }}>
-
-        {/* Question Cards */}
-        {step < RESULT_STEP && (
+      {view === "quiz" && (
+        <div style={{ height: "1px", background: cardBorder }}>
           <div style={{
-            width: "100%",
-            opacity: animating ? 0 : 1,
-            transform: animating ? `translateX(${direction * 24}px)` : "translateX(0)",
-            transition: "opacity 0.25s ease, transform 0.25s ease",
-          }}>
-            {/* Step dots */}
-            <div style={{ display: "flex", gap: "6px", justifyContent: "center", marginBottom: "2rem" }}>
-              {QUESTIONS.map((_, i) => (
-                <div key={i} style={{
-                  width: i === step ? "20px" : "6px",
-                  height: "6px",
-                  borderRadius: "3px",
-                  background: i === step ? accent : i < step ? accent + "66" : chipBorder,
-                  transition: "all 0.3s ease",
-                }} />
-              ))}
+            height: "1px",
+            background: accent,
+            width: `${progress}%`,
+            transition: "width 0.5s ease",
+          }} />
+        </div>
+      )}
+
+      {/* Journal View */}
+      {view === "journal" && (
+        <main style={{
+          flex: 1,
+          padding: "2.5rem 2rem",
+          maxWidth: "640px",
+          margin: "0 auto",
+          width: "100%",
+          boxSizing: "border-box",
+        }}>
+          {entries.length === 0 ? (
+            <div style={{ textAlign: "center", color: fgMuted, fontSize: "1.1rem", marginTop: "4rem" }}>
+              No entries yet. Complete a reflection to begin your journal.
             </div>
-
-            {/* Card */}
-            <div style={{
-              background: cardBg,
-              border: `0.5px solid ${cardBorder}`,
-              borderRadius: "16px",
-              padding: "2.5rem 2.25rem 2.25rem",
-              boxShadow: dark ? "none" : "0 2px 24px rgba(0,0,0,0.06)",
-            }}>
-              <p style={{
-                fontSize: "1.7rem",
-                fontWeight: 400,
-                lineHeight: 1.4,
-                color: fg,
-                marginBottom: "1.75rem",
-                
-                textAlign: "center",
-                margin: "0 0 1.75rem 0",
-              }}>
-                {current.prompt}
-              </p>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                {current.options.map((opt) => {
-                  const isSel = selected === opt;
-                  return (
-                    <button
-                      key={opt}
-                      onClick={() => setSelected(opt)}
-                      style={{
-                        background: isSel ? chipBgSel : chipBg,
-                        border: `0.5px solid ${isSel ? chipBorderSel : chipBorder}`,
-                        borderRadius: "10px",
-                        padding: "16px 8px",
-                        cursor: "pointer",
-                        fontFamily: SERIF,
-                        fontSize: "1rem",
-                        color: isSel ? accent : fg,
-                        transition: "all 0.18s ease",
-                        textAlign: "center",
-                        letterSpacing: "0.01em",
-                      }}
-                    >
-                      {opt}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Nav */}
-            <div style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginTop: "1.5rem",
-            }}>
-              <button
-                onClick={() => step > 0 && go(-1)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: step > 0 ? "pointer" : "default",
-                  color: step > 0 ? fgMuted : "transparent",
-                  fontFamily: SERIF,
-                  fontSize: "0.9rem",
-                  padding: "8px 0",
-                  letterSpacing: "0.04em",
-                  transition: "color 0.2s",
-                }}
-              >
-                ← back
-              </button>
-
-              <button
-                onClick={() => selected && go(1, selected)}
-                style={{
-                  background: selected ? accent : "transparent",
-                  border: `0.5px solid ${selected ? accent : chipBorder}`,
-                  borderRadius: "24px",
-                  padding: "10px 28px",
-                  cursor: selected ? "pointer" : "default",
-                  fontFamily: SERIF,
-                  fontSize: "0.95rem",
-                  color: selected ? (dark ? "#0d0c0a" : "#fff") : fgMuted,
-                  letterSpacing: "0.04em",
-                  transition: "all 0.2s ease",
-                }}
-              >
-                {step === QUESTIONS.length - 1 ? "reveal" : "continue →"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Result */}
-        {step === RESULT_STEP && (
-          <div style={{ width: "100%", textAlign: "center" }}>
-            {loading && (
-              <div style={{ color: fgMuted,  fontSize: "1.1rem" }}>
-                <span style={{ animation: "pulse 2s infinite", display: "inline-block" }}>
-                  Searching the Word...
-                </span>
-              </div>
-            )}
-
-            {error && (
-              <div>
-                <div style={{ color: "#b94040", fontSize: "1rem", marginBottom: "1rem" }}>{error}</div>
-                <button onClick={() => fetchResult(answers)} style={{
-                  background: "none", border: `0.5px solid ${chipBorder}`,
-                  borderRadius: "24px", padding: "10px 22px", cursor: "pointer",
-                  fontFamily: SERIF, fontSize: "0.9rem", color: fgMuted,
-                }}>try again</button>
-              </div>
-            )}
-
-            {result && (
-              <div style={{ animation: "fadeIn 0.6s ease" }}>
-
-                {/* Reference */}
+          ) : (
+            Object.entries(groupByMonth(entries)).map(([month, monthEntries]) => (
+              <div key={month} style={{ marginBottom: "2.5rem" }}>
                 <div style={{
-                  fontSize: "0.78rem",
+                  fontSize: "0.72rem",
                   letterSpacing: "0.14em",
-                  color: accent,
                   textTransform: "uppercase",
-                  marginBottom: "1.25rem",
+                  color: accent,
                   fontWeight: 500,
-                }}>
-                  {result.reference}
-                </div>
-
-                {/* Verse */}
-                <div style={{
-                  background: cardBg,
-                  border: `0.5px solid ${cardBorder}`,
-                  borderRadius: "16px",
-                  padding: "2.25rem",
                   marginBottom: "1rem",
-                  boxShadow: dark ? "none" : "0 2px 24px rgba(0,0,0,0.06)",
-                  textAlign: "left",
                 }}>
-                  <div style={{
-                    fontSize: "1.6rem",
-                    lineHeight: 1.7,
-                    
-                    color: fg,
-                    fontWeight: 400,
-                    minHeight: "56px",
-                  }}>
-                    "{verseText}{!verseDone && <span style={{ animation: "blink 1s step-end infinite" }}>|</span>}{verseDone && `"`}
-                  </div>
+                  {month}
                 </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {monthEntries.map(entry => {
+                    const isOpen = expandedId === entry.id;
+                    return (
+                      <div
+                        key={entry.id}
+                        style={{
+                          background: cardBg,
+                          border: `0.5px solid ${isOpen ? accent + "66" : cardBorder}`,
+                          borderRadius: "14px",
+                          overflow: "hidden",
+                          transition: "border-color 0.2s",
+                        }}
+                      >
+                        {/* Entry header — always visible */}
+                        <button
+                          onClick={() => setExpandedId(isOpen ? null : entry.id)}
+                          style={{
+                            width: "100%",
+                            background: "none",
+                            border: "none",
+                            padding: "1.1rem 1.5rem",
+                            cursor: "pointer",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            fontFamily: SERIF,
+                            textAlign: "left",
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontSize: "0.9rem", color: fg, marginBottom: "4px" }}>
+                              {formatDate(entry.date)}
+                            </div>
+                            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                              {Object.values(entry.answers).map((a, i) => (
+                                <span key={i} style={{
+                                  background: chipBg,
+                                  border: `0.5px solid ${chipBorder}`,
+                                  borderRadius: "20px",
+                                  padding: "2px 10px",
+                                  fontSize: "0.72rem",
+                                  color: fgMuted,
+                                }}>
+                                  {a}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <span style={{ color: fgMuted, fontSize: "0.85rem", marginLeft: "1rem", flexShrink: 0 }}>
+                            {isOpen ? "↑" : "↓"}
+                          </span>
+                        </button>
 
-                {/* Theologian quote */}
-                {quoteText && (
+                        {/* Expanded entry content */}
+                        {isOpen && (
+                          <div style={{ padding: "0 1.5rem 1.5rem", animation: "fadeIn 0.3s ease" }}>
+                            <div style={{ height: "0.5px", background: cardBorder, marginBottom: "1.25rem" }} />
+
+                            {/* Reference */}
+                            <div style={{
+                              fontSize: "0.72rem",
+                              letterSpacing: "0.14em",
+                              color: accent,
+                              textTransform: "uppercase",
+                              fontWeight: 500,
+                              marginBottom: "0.75rem",
+                            }}>
+                              {entry.result.reference}
+                            </div>
+
+                            {/* Verse */}
+                            <div style={{
+                              fontSize: "1.25rem",
+                              lineHeight: 1.7,
+                              color: fg,
+                              marginBottom: "1rem",
+                            }}>
+                              "{entry.result.verse}"
+                            </div>
+
+                            {/* Theologian */}
+                            <div style={{
+                              borderLeft: `2px solid ${accent}33`,
+                              paddingLeft: "1rem",
+                              marginBottom: "1rem",
+                            }}>
+                              <div style={{
+                                fontSize: "0.68rem",
+                                letterSpacing: "0.1em",
+                                textTransform: "uppercase",
+                                color: accent,
+                                fontWeight: 500,
+                                marginBottom: "0.4rem",
+                              }}>
+                                {entry.result.theologian}
+                              </div>
+                              <div style={{ fontSize: "0.95rem", lineHeight: 1.6, color: fgMuted }}>
+                                "{entry.result.theologianQuote}"
+                              </div>
+                            </div>
+
+                            {/* Prayer */}
+                            <div style={{
+                              background: prayerBg,
+                              border: `0.5px solid ${cardBorder}`,
+                              borderRadius: "10px",
+                              padding: "1.25rem 1.5rem",
+                              marginBottom: "1rem",
+                            }}>
+                              <div style={{
+                                fontSize: "0.68rem",
+                                letterSpacing: "0.1em",
+                                textTransform: "uppercase",
+                                color: accent,
+                                fontWeight: 500,
+                                marginBottom: "0.65rem",
+                              }}>
+                                A prayer for you
+                              </div>
+                              <div style={{ fontSize: "1rem", lineHeight: 1.85, color: fg }}>
+                                {entry.result.prayerLines.join(" ")}
+                              </div>
+                            </div>
+
+                            {/* Note */}
+                            <JournalNoteEditor
+                              entry={entry}
+                              dark={dark}
+                              fg={fg}
+                              fgMuted={fgMuted}
+                              cardBorder={cardBorder}
+                              accent={accent}
+                              chipBorder={chipBorder}
+                              SERIF={SERIF}
+                              onSave={(newNote) => updateJournalNote(entry.id, newNote)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </main>
+      )}
+
+      {/* Quiz View */}
+      {view === "quiz" && (
+        <main style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "2.25rem",
+          maxWidth: "600px",
+          margin: "0 auto",
+          width: "100%",
+          boxSizing: "border-box",
+        }}>
+
+          {/* Question Cards */}
+          {step < RESULT_STEP && (
+            <div style={{
+              width: "100%",
+              opacity: animating ? 0 : 1,
+              transform: animating ? `translateX(${direction * 24}px)` : "translateX(0)",
+              transition: "opacity 0.25s ease, transform 0.25s ease",
+            }}>
+              {/* Step dots */}
+              <div style={{ display: "flex", gap: "6px", justifyContent: "center", marginBottom: "2rem" }}>
+                {QUESTIONS.map((_, i) => (
+                  <div key={i} style={{
+                    width: i === step ? "20px" : "6px",
+                    height: "6px",
+                    borderRadius: "3px",
+                    background: i === step ? accent : i < step ? accent + "66" : chipBorder,
+                    transition: "all 0.3s ease",
+                  }} />
+                ))}
+              </div>
+
+              {/* Card */}
+              <div style={{
+                background: cardBg,
+                border: `0.5px solid ${cardBorder}`,
+                borderRadius: "16px",
+                padding: "2.5rem 2.25rem 2.25rem",
+                boxShadow: dark ? "none" : "0 2px 24px rgba(0,0,0,0.06)",
+              }}>
+                <p style={{
+                  fontSize: "1.7rem",
+                  fontWeight: 400,
+                  lineHeight: 1.4,
+                  color: fg,
+                  textAlign: "center",
+                  margin: "0 0 1.75rem 0",
+                }}>
+                  {current.prompt}
+                </p>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  {current.options.map((opt) => {
+                    const isSel = selected === opt;
+                    return (
+                      <button
+                        key={opt}
+                        onClick={() => setSelected(opt)}
+                        style={{
+                          background: isSel ? chipBgSel : chipBg,
+                          border: `0.5px solid ${isSel ? chipBorderSel : chipBorder}`,
+                          borderRadius: "10px",
+                          padding: "16px 8px",
+                          cursor: "pointer",
+                          fontFamily: SERIF,
+                          fontSize: "1rem",
+                          color: isSel ? accent : fg,
+                          transition: "all 0.18s ease",
+                          textAlign: "center",
+                          letterSpacing: "0.01em",
+                        }}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Nav */}
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginTop: "1.5rem",
+              }}>
+                <button
+                  onClick={() => step > 0 && go(-1)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: step > 0 ? "pointer" : "default",
+                    color: step > 0 ? fgMuted : "transparent",
+                    fontFamily: SERIF,
+                    fontSize: "0.9rem",
+                    padding: "8px 0",
+                    letterSpacing: "0.04em",
+                    transition: "color 0.2s",
+                  }}
+                >
+                  ← back
+                </button>
+
+                <button
+                  onClick={() => selected && go(1, selected)}
+                  style={{
+                    background: selected ? accent : "transparent",
+                    border: `0.5px solid ${selected ? accent : chipBorder}`,
+                    borderRadius: "24px",
+                    padding: "10px 28px",
+                    cursor: selected ? "pointer" : "default",
+                    fontFamily: SERIF,
+                    fontSize: "0.95rem",
+                    color: selected ? (dark ? "#0d0c0a" : "#fff") : fgMuted,
+                    letterSpacing: "0.04em",
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  {step === QUESTIONS.length - 1 ? "reveal" : "continue →"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Result */}
+          {step === RESULT_STEP && (
+            <div style={{ width: "100%", textAlign: "center" }}>
+              {loading && (
+                <div style={{ color: fgMuted, fontSize: "1.1rem" }}>
+                  <span style={{ animation: "pulse 2s infinite", display: "inline-block" }}>
+                    Searching the Word...
+                  </span>
+                </div>
+              )}
+
+              {error && (
+                <div>
+                  <div style={{ color: "#b94040", fontSize: "1rem", marginBottom: "1rem" }}>{error}</div>
+                  <button onClick={() => fetchResult(answers)} style={{
+                    background: "none", border: `0.5px solid ${chipBorder}`,
+                    borderRadius: "24px", padding: "10px 22px", cursor: "pointer",
+                    fontFamily: SERIF, fontSize: "0.9rem", color: fgMuted,
+                  }}>try again</button>
+                </div>
+              )}
+
+              {result && (
+                <div style={{ animation: "fadeIn 0.6s ease" }}>
+
+                  {/* Reference */}
+                  <div style={{
+                    fontSize: "0.78rem",
+                    letterSpacing: "0.14em",
+                    color: accent,
+                    textTransform: "uppercase",
+                    marginBottom: "1.25rem",
+                    fontWeight: 500,
+                  }}>
+                    {result.reference}
+                  </div>
+
+                  {/* Verse */}
                   <div style={{
                     background: cardBg,
                     border: `0.5px solid ${cardBorder}`,
                     borderRadius: "16px",
-                    padding: "1.5rem 2rem",
-                    marginBottom: "1rem",
-                    textAlign: "left",
-                    boxShadow: dark ? "none" : "0 2px 24px rgba(0,0,0,0.06)",
-                  }}>
-                    <div style={{
-                      fontSize: "0.72rem",
-                      letterSpacing: "0.1em",
-                      textTransform: "uppercase",
-                      color: accent,
-                      marginBottom: "0.65rem",
-                      fontWeight: 500,
-                    }}>
-                      {result.theologian}
-                    </div>
-                    <div style={{
-                      fontSize: "1.05rem",
-                      lineHeight: 1.65,
-                      color: fgMuted,
-                      
-                    }}>
-                      "{quoteText}{!quoteDone && <span style={{ animation: "blink 1s step-end infinite" }}>|</span>}{quoteDone && `"`}
-                    </div>
-                  </div>
-                )}
-
-                {/* Prayer */}
-                {prayer1 && (
-                  <div style={{
-                    background: prayerBg,
-                    border: `0.5px solid ${cardBorder}`,
-                    borderRadius: "16px",
                     padding: "2.25rem",
-                    marginBottom: "1.5rem",
-                    textAlign: "left",
+                    marginBottom: "1rem",
                     boxShadow: dark ? "none" : "0 2px 24px rgba(0,0,0,0.06)",
+                    textAlign: "left",
                   }}>
                     <div style={{
-                      fontSize: "0.72rem",
-                      letterSpacing: "0.1em",
-                      textTransform: "uppercase",
-                      color: accent,
-                      marginBottom: "1rem",
-                      fontWeight: 500,
+                      fontSize: "1.6rem",
+                      lineHeight: 1.7,
+                      color: fg,
+                      fontWeight: 400,
+                      minHeight: "56px",
                     }}>
-                      A prayer for you
-                    </div>
-                    <div style={{ fontSize: "1.3rem", lineHeight: 1.9, color: fg,  }}>
-                      {prayer1}{!p1Done && <span style={{ animation: "blink 1s step-end infinite" }}>|</span>}
-                      {prayer2 && (
-                        <span>
-                          {" "}{prayer2}{!p2Done && <span style={{ animation: "blink 1s step-end infinite" }}>|</span>}
-                        </span>
-                      )}
-                      {prayer3 && <span> {prayer3}</span>}
+                      "{verseText}{!verseDone && <span style={{ animation: "blink 1s step-end infinite" }}>|</span>}{verseDone && `"`}
                     </div>
                   </div>
-                )}
 
-                {/* Answer chips */}
-                <div style={{
-                  display: "flex",
-                  gap: "8px",
-                  justifyContent: "center",
-                  flexWrap: "wrap",
-                  marginBottom: "1.75rem",
-                }}>
-                  {Object.values(answers).map((a, i) => (
-                    <span key={i} style={{
-                      background: chipBg,
-                      border: `0.5px solid ${chipBorder}`,
-                      borderRadius: "20px",
-                      padding: "4px 12px",
-                      fontSize: "0.78rem",
-                      color: fgMuted,
-                      
+                  {/* Theologian quote */}
+                  {quoteText && (
+                    <div style={{
+                      background: cardBg,
+                      border: `0.5px solid ${cardBorder}`,
+                      borderRadius: "16px",
+                      padding: "1.5rem 2rem",
+                      marginBottom: "1rem",
+                      textAlign: "left",
+                      boxShadow: dark ? "none" : "0 2px 24px rgba(0,0,0,0.06)",
                     }}>
-                      {a}
-                    </span>
-                  ))}
-                </div>
+                      <div style={{
+                        fontSize: "0.72rem",
+                        letterSpacing: "0.1em",
+                        textTransform: "uppercase",
+                        color: accent,
+                        marginBottom: "0.65rem",
+                        fontWeight: 500,
+                      }}>
+                        {result.theologian}
+                      </div>
+                      <div style={{
+                        fontSize: "1.05rem",
+                        lineHeight: 1.65,
+                        color: fgMuted,
+                      }}>
+                        "{quoteText}{!quoteDone && <span style={{ animation: "blink 1s step-end infinite" }}>|</span>}{quoteDone && `"`}
+                      </div>
+                    </div>
+                  )}
 
-                {/* Actions */}
-                <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
-                  <button
-                    onClick={() => fetchResult(answers)}
-                    style={{
-                      background: "none",
-                      border: `0.5px solid ${chipBorder}`,
-                      borderRadius: "24px",
-                      padding: "10px 22px",
-                      cursor: "pointer",
-                      fontFamily: SERIF,
-                      fontSize: "0.9rem",
-                      color: fgMuted,
-                      letterSpacing: "0.04em",
-                      transition: "border-color 0.2s",
-                    }}
-                  >
-                    ↺ another
-                  </button>
-                  <button
-                    onClick={reset}
-                    style={{
-                      background: accent,
-                      border: "none",
-                      borderRadius: "24px",
-                      padding: "10px 22px",
-                      cursor: "pointer",
-                      fontFamily: SERIF,
-                      fontSize: "0.9rem",
-                      color: dark ? "#0d0c0a" : "#fff",
-                      letterSpacing: "0.04em",
-                    }}
-                  >
-                    start over
-                  </button>
+                  {/* Prayer */}
+                  {prayer1 && (
+                    <div style={{
+                      background: prayerBg,
+                      border: `0.5px solid ${cardBorder}`,
+                      borderRadius: "16px",
+                      padding: "2.25rem",
+                      marginBottom: "1rem",
+                      textAlign: "left",
+                      boxShadow: dark ? "none" : "0 2px 24px rgba(0,0,0,0.06)",
+                    }}>
+                      <div style={{
+                        fontSize: "0.72rem",
+                        letterSpacing: "0.1em",
+                        textTransform: "uppercase",
+                        color: accent,
+                        marginBottom: "1rem",
+                        fontWeight: 500,
+                      }}>
+                        A prayer for you
+                      </div>
+                      <div style={{ fontSize: "1.3rem", lineHeight: 1.9, color: fg }}>
+                        {prayer1}{!p1Done && <span style={{ animation: "blink 1s step-end infinite" }}>|</span>}
+                        {prayer2 && (
+                          <span>
+                            {" "}{prayer2}{!p2Done && <span style={{ animation: "blink 1s step-end infinite" }}>|</span>}
+                          </span>
+                        )}
+                        {prayer3 && <span> {prayer3}</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Reflection note — appears after prayer finishes */}
+                  {p3Done && (
+                    <div style={{
+                      background: cardBg,
+                      border: `0.5px solid ${cardBorder}`,
+                      borderRadius: "16px",
+                      padding: "1.75rem 2rem",
+                      marginBottom: "1rem",
+                      textAlign: "left",
+                      animation: "fadeIn 0.5s ease",
+                      boxShadow: dark ? "none" : "0 2px 24px rgba(0,0,0,0.06)",
+                    }}>
+                      <div style={{
+                        fontSize: "0.72rem",
+                        letterSpacing: "0.1em",
+                        textTransform: "uppercase",
+                        color: accent,
+                        fontWeight: 500,
+                        marginBottom: "0.85rem",
+                      }}>
+                        Your reflection
+                      </div>
+                      <textarea
+                        value={note}
+                        onChange={e => { setNote(e.target.value); setNoteSaved(false); }}
+                        placeholder="Write a thought, a prayer of your own, or whatever is on your heart..."
+                        rows={4}
+                        style={{
+                          width: "100%",
+                          background: "transparent",
+                          border: `0.5px solid ${chipBorder}`,
+                          borderRadius: "10px",
+                          padding: "0.85rem 1rem",
+                          fontFamily: SERIF,
+                          fontSize: "1rem",
+                          color: fg,
+                          lineHeight: 1.65,
+                          resize: "vertical",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.65rem" }}>
+                        <button
+                          onClick={saveNote}
+                          disabled={!note.trim()}
+                          style={{
+                            background: note.trim() ? accent : "transparent",
+                            border: `0.5px solid ${note.trim() ? accent : chipBorder}`,
+                            borderRadius: "20px",
+                            padding: "6px 18px",
+                            cursor: note.trim() ? "pointer" : "default",
+                            fontFamily: SERIF,
+                            fontSize: "0.82rem",
+                            color: note.trim() ? (dark ? "#0d0c0a" : "#fff") : fgMuted,
+                            letterSpacing: "0.04em",
+                            transition: "all 0.2s ease",
+                          }}
+                        >
+                          {noteSaved ? "saved ✓" : "save note"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Answer chips */}
+                  <div style={{
+                    display: "flex",
+                    gap: "8px",
+                    justifyContent: "center",
+                    flexWrap: "wrap",
+                    marginBottom: "1.75rem",
+                    marginTop: "0.5rem",
+                  }}>
+                    {Object.values(answers).map((a, i) => (
+                      <span key={i} style={{
+                        background: chipBg,
+                        border: `0.5px solid ${chipBorder}`,
+                        borderRadius: "20px",
+                        padding: "4px 12px",
+                        fontSize: "0.78rem",
+                        color: fgMuted,
+                      }}>
+                        {a}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+                    <button
+                      onClick={() => fetchResult(answers)}
+                      style={{
+                        background: "none",
+                        border: `0.5px solid ${chipBorder}`,
+                        borderRadius: "24px",
+                        padding: "10px 22px",
+                        cursor: "pointer",
+                        fontFamily: SERIF,
+                        fontSize: "0.9rem",
+                        color: fgMuted,
+                        letterSpacing: "0.04em",
+                        transition: "border-color 0.2s",
+                      }}
+                    >
+                      ↺ another
+                    </button>
+                    <button
+                      onClick={reset}
+                      style={{
+                        background: accent,
+                        border: "none",
+                        borderRadius: "24px",
+                        padding: "10px 22px",
+                        cursor: "pointer",
+                        fontFamily: SERIF,
+                        fontSize: "0.9rem",
+                        color: dark ? "#0d0c0a" : "#fff",
+                        letterSpacing: "0.04em",
+                      }}
+                    >
+                      start over
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-      </main>
+              )}
+            </div>
+          )}
+        </main>
+      )}
+    </div>
+  );
+}
+
+function JournalNoteEditor({ entry, dark, fg, fgMuted, cardBorder, accent, chipBorder, SERIF, onSave }) {
+  const [note, setNote] = useState(entry.note || "");
+  const [saved, setSaved] = useState(!!entry.note);
+
+  const handleSave = () => {
+    onSave(note);
+    setSaved(true);
+  };
+
+  return (
+    <div style={{ marginTop: "0.5rem" }}>
+      <div style={{
+        fontSize: "0.68rem",
+        letterSpacing: "0.1em",
+        textTransform: "uppercase",
+        color: accent,
+        fontWeight: 500,
+        marginBottom: "0.6rem",
+      }}>
+        Reflection
+      </div>
+      <textarea
+        value={note}
+        onChange={e => { setNote(e.target.value); setSaved(false); }}
+        placeholder="Add a note or reflection..."
+        rows={3}
+        style={{
+          width: "100%",
+          background: "transparent",
+          border: `0.5px solid ${chipBorder}`,
+          borderRadius: "8px",
+          padding: "0.75rem 0.9rem",
+          fontFamily: SERIF,
+          fontSize: "0.95rem",
+          color: fg,
+          lineHeight: 1.65,
+          resize: "vertical",
+          boxSizing: "border-box",
+        }}
+      />
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.5rem" }}>
+        <button
+          onClick={handleSave}
+          disabled={!note.trim()}
+          style={{
+            background: "none",
+            border: `0.5px solid ${note.trim() ? accent : chipBorder}`,
+            borderRadius: "20px",
+            padding: "5px 16px",
+            cursor: note.trim() ? "pointer" : "default",
+            fontFamily: SERIF,
+            fontSize: "0.78rem",
+            color: note.trim() ? accent : fgMuted,
+            letterSpacing: "0.04em",
+            transition: "all 0.2s ease",
+          }}
+        >
+          {saved ? "saved ✓" : "save"}
+        </button>
+      </div>
     </div>
   );
 }
