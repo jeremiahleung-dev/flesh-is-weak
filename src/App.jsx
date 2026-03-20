@@ -277,8 +277,8 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
 
       {/* Header */}
       <header style={{
-        display: "flex",
-        justifyContent: "space-between",
+        display: "grid",
+        gridTemplateColumns: "1fr auto 1fr",
         alignItems: "center",
         padding: "1.5rem 2rem",
         borderBottom: `0.5px solid ${cardBorder}`,
@@ -294,7 +294,12 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
             Matthew 26:41
           </div>
         </div>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "0.78rem", color: fgMuted, letterSpacing: "0.08em" }}>
+            {new Date().toLocaleDateString("default", { weekday: "long", month: "long", day: "numeric" })}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "flex-end" }}>
           <button
             onClick={() => setView(view === "journal" ? "quiz" : "journal")}
             style={btnStyle(view === "journal")}
