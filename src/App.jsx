@@ -198,10 +198,10 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
         borderBottom: `0.5px solid ${cardBorder}`,
       }}>
         <div>
-          <div style={{ fontSize: "1.05rem", fontWeight: 600, letterSpacing: "0.02em", color: fg }}>
+          <div style={{ fontSize: "1.2rem", fontWeight: 600, letterSpacing: "0.02em", color: fg }}>
             The Flesh is Weak
           </div>
-          <div style={{ fontSize: "0.78rem", color: fgMuted, marginTop: "1px", fontStyle: "italic" }}>
+          <div style={{ fontSize: "0.88rem", color: fgMuted, marginTop: "1px",  }}>
             Matthew 26:41
           </div>
         </div>
@@ -241,8 +241,8 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: "2rem",
-        maxWidth: "540px",
+        padding: "2.25rem",
+        maxWidth: "600px",
         margin: "0 auto",
         width: "100%",
         boxSizing: "border-box",
@@ -274,16 +274,16 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
               background: cardBg,
               border: `0.5px solid ${cardBorder}`,
               borderRadius: "16px",
-              padding: "2.5rem 2rem 2rem",
+              padding: "2.5rem 2.25rem 2.25rem",
               boxShadow: dark ? "none" : "0 2px 24px rgba(0,0,0,0.06)",
             }}>
               <p style={{
-                fontSize: "1.45rem",
+                fontSize: "1.7rem",
                 fontWeight: 400,
                 lineHeight: 1.4,
                 color: fg,
                 marginBottom: "1.75rem",
-                fontStyle: "italic",
+                
                 textAlign: "center",
                 margin: "0 0 1.75rem 0",
               }}>
@@ -301,7 +301,7 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                         background: isSel ? chipBgSel : chipBg,
                         border: `0.5px solid ${isSel ? chipBorderSel : chipBorder}`,
                         borderRadius: "10px",
-                        padding: "12px 8px",
+                        padding: "16px 8px",
                         cursor: "pointer",
                         fontFamily: SERIF,
                         fontSize: "1rem",
@@ -367,7 +367,7 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
         {step === RESULT_STEP && (
           <div style={{ width: "100%", textAlign: "center" }}>
             {loading && (
-              <div style={{ color: fgMuted, fontStyle: "italic", fontSize: "1.1rem" }}>
+              <div style={{ color: fgMuted,  fontSize: "1.1rem" }}>
                 <span style={{ animation: "pulse 2s infinite", display: "inline-block" }}>
                   Searching the Word...
                 </span>
@@ -405,15 +405,15 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                   background: cardBg,
                   border: `0.5px solid ${cardBorder}`,
                   borderRadius: "16px",
-                  padding: "2rem",
+                  padding: "2.25rem",
                   marginBottom: "1rem",
                   boxShadow: dark ? "none" : "0 2px 24px rgba(0,0,0,0.06)",
                   textAlign: "left",
                 }}>
                   <div style={{
-                    fontSize: "1.38rem",
+                    fontSize: "1.6rem",
                     lineHeight: 1.7,
-                    fontStyle: "italic",
+                    
                     color: fg,
                     fontWeight: 400,
                     minHeight: "56px",
@@ -447,7 +447,7 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                       fontSize: "1.05rem",
                       lineHeight: 1.65,
                       color: fgMuted,
-                      fontStyle: "italic",
+                      
                     }}>
                       "{quoteText}{!quoteDone && <span style={{ animation: "blink 1s step-end infinite" }}>|</span>}{quoteDone && `"`}
                     </div>
@@ -460,7 +460,7 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                     background: prayerBg,
                     border: `0.5px solid ${cardBorder}`,
                     borderRadius: "16px",
-                    padding: "2rem",
+                    padding: "2.25rem",
                     marginBottom: "1.5rem",
                     textAlign: "left",
                     boxShadow: dark ? "none" : "0 2px 24px rgba(0,0,0,0.06)",
@@ -475,7 +475,7 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                     }}>
                       A prayer for you
                     </div>
-                    <div style={{ fontSize: "1.12rem", lineHeight: 1.9, color: fg, fontStyle: "italic" }}>
+                    <div style={{ fontSize: "1.3rem", lineHeight: 1.9, color: fg,  }}>
                       {prayer1}{!p1Done && <span style={{ animation: "blink 1s step-end infinite" }}>|</span>}
                       {prayer2 && (
                         <span>
@@ -503,7 +503,7 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                       padding: "4px 12px",
                       fontSize: "0.78rem",
                       color: fgMuted,
-                      fontStyle: "italic",
+                      
                     }}>
                       {a}
                     </span>
