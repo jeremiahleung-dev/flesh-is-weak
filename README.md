@@ -1,6 +1,8 @@
-# The Flesh is Weak
+# quiet place
 
 A minimalist spiritual devotional app. Answer 5 questions about your emotional state and receive a Bible verse, a theologian quote, and a personalized 3-sentence prayer — powered by Claude AI.
+
+Live: [myquietplace.vercel.app](https://myquietplace.vercel.app)
 
 ---
 
@@ -30,7 +32,7 @@ npm run dev        # localhost:5173
 git init
 git add .
 git commit -m "initial commit"
-git remote add origin https://github.com/YOUR_USERNAME/flesh-is-weak.git
+git remote add origin https://github.com/jeremiahleung-dev/quiet-place.git
 git push -u origin main
 ```
 
@@ -77,7 +79,7 @@ Browser → POST /api/verse → Edge Function → Anthropic API
 
 Once deployed on Vercel:
 1. Go to your project → **Settings → Domains**
-2. Add your domain (e.g. `thefleshisweak.com`)
+2. Add your domain (e.g. `myquietplace.vercel.app`)
 3. Update DNS at your registrar to point to Vercel
 
 ---
