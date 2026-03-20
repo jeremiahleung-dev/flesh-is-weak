@@ -363,12 +363,41 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
         padding: "1.5rem 2rem",
         borderBottom: `0.5px solid ${cardBorder}`,
       }}>
-        <div onClick={() => setView("quiz")} style={{ cursor: "pointer" }}>
-          <div style={{ fontSize: "1.2rem", fontWeight: 600, letterSpacing: "0.02em", color: fg }}>
-            The Flesh is Weak
-          </div>
-          <div style={{ fontSize: "0.88rem", color: fgMuted, marginTop: "1px" }}>
-            Matthew 26:41
+        <div onClick={() => setView("quiz")} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          {/* Mountain logo */}
+          <svg width="36" height="26" viewBox="0 0 36 26" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, opacity: 0.85 }}>
+            <polyline
+              points="2,24 10,6 18,17"
+              stroke={accent}
+              strokeWidth="1.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+              style={{ filter: "url(#roughen)" }}
+            />
+            <polyline
+              points="10,6 18,17 26,4 34,24"
+              stroke={accent}
+              strokeWidth="1.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+            <line x1="2" y1="24" x2="34" y2="24" stroke={accent} strokeWidth="0.8" strokeLinecap="round" opacity="0.4" />
+            <defs>
+              <filter id="roughen" x="-5%" y="-5%" width="110%" height="110%">
+                <feTurbulence type="turbulence" baseFrequency="0.05" numOctaves="2" result="noise" seed="3"/>
+                <feDisplacementMap in="SourceGraphic" in2="noise" scale="0.6" xChannelSelector="R" yChannelSelector="G"/>
+              </filter>
+            </defs>
+          </svg>
+          <div>
+            <div style={{ fontSize: "1.2rem", fontWeight: 600, letterSpacing: "0.02em", color: fg }}>
+              quiet place
+            </div>
+            <div style={{ fontSize: "0.88rem", color: fgMuted, marginTop: "1px" }}>
+              Matthew 26:41
+            </div>
           </div>
         </div>
         <div style={{ textAlign: "center" }}>
@@ -654,7 +683,7 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                 </p>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                  {current.options.map((opt, i) => {
+                  {current.options.map((opt) => {
                     const isSel = selected === opt;
                     return (
                       <button
@@ -672,20 +701,8 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                           transition: "all 0.18s ease",
                           textAlign: "center",
                           letterSpacing: "0.01em",
-                          position: "relative",
                         }}
                       >
-                        <span style={{
-                          position: "absolute",
-                          top: "6px",
-                          left: "8px",
-                          fontSize: "0.6rem",
-                          color: isSel ? accent : fgMuted,
-                          opacity: 0.5,
-                          fontFamily: "monospace",
-                        }}>
-                          {i + 1}
-                        </span>
                         {opt}
                       </button>
                     );
