@@ -357,55 +357,28 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
 
       {/* Header */}
       <header style={{
-        display: "grid",
-        gridTemplateColumns: "1fr auto 1fr",
+        display: "flex",
+        justifyContent: "space-between",
         alignItems: "center",
-        padding: "1.5rem 2rem",
+        padding: "1.25rem 1.5rem",
         borderBottom: `0.5px solid ${cardBorder}`,
       }}>
-        <div onClick={() => setView("quiz")} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          {/* Mountain logo */}
-          <svg width="36" height="26" viewBox="0 0 36 26" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, opacity: 0.85 }}>
-            <polyline
-              points="2,24 10,6 18,17"
-              stroke={accent}
-              strokeWidth="1.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-              style={{ filter: "url(#roughen)" }}
-            />
-            <polyline
-              points="10,6 18,17 26,4 34,24"
-              stroke={accent}
-              strokeWidth="1.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
+        <div onClick={() => setView("quiz")} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "0.65rem" }}>
+          <svg width="34" height="24" viewBox="0 0 36 26" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, opacity: 0.85 }}>
+            <polyline points="2,24 10,6 18,17" stroke={accent} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <polyline points="10,6 18,17 26,4 34,24" stroke={accent} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
             <line x1="2" y1="24" x2="34" y2="24" stroke={accent} strokeWidth="0.8" strokeLinecap="round" opacity="0.4" />
-            <defs>
-              <filter id="roughen" x="-5%" y="-5%" width="110%" height="110%">
-                <feTurbulence type="turbulence" baseFrequency="0.05" numOctaves="2" result="noise" seed="3"/>
-                <feDisplacementMap in="SourceGraphic" in2="noise" scale="0.6" xChannelSelector="R" yChannelSelector="G"/>
-              </filter>
-            </defs>
           </svg>
           <div>
-            <div style={{ fontSize: "1.2rem", fontWeight: 600, letterSpacing: "0.02em", color: fg }}>
+            <div style={{ fontSize: "1.1rem", fontWeight: 600, letterSpacing: "0.02em", color: fg, lineHeight: 1.2 }}>
               quiet place
             </div>
-            <div style={{ fontSize: "0.88rem", color: fgMuted, marginTop: "1px" }}>
+            <div style={{ fontSize: "0.78rem", color: fgMuted, marginTop: "1px" }}>
               Matthew 26:41
             </div>
           </div>
         </div>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "0.78rem", color: fgMuted, letterSpacing: "0.08em" }}>
-            {new Date().toLocaleDateString("default", { weekday: "long", month: "long", day: "numeric" })}
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <button
             onClick={() => setView(view === "journal" ? "quiz" : "journal")}
             style={btnStyle(view === "journal")}
@@ -620,6 +593,9 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
               {/* Greeting + intro — step 0 only */}
               {step === 0 && (
                 <div style={{ textAlign: "center", marginBottom: "1.75rem", animation: "fadeIn 0.5s ease" }}>
+                  <div style={{ fontSize: "0.75rem", color: fgMuted, opacity: 0.55, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.6rem" }}>
+                    {new Date().toLocaleDateString("default", { weekday: "long", month: "long", day: "numeric" })}
+                  </div>
                   <div style={{ fontSize: "1.1rem", color: fgMuted, marginBottom: "0.3rem" }}>
                     {getGreeting()}
                   </div>
@@ -685,10 +661,14 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                   {current.options.map((opt) => {
                     const isSel = selected === opt;
+                    const isLast = step === QUESTIONS.length - 1;
                     return (
                       <button
                         key={opt}
-                        onClick={() => setSelected(opt)}
+                        onClick={() => {
+                          setSelected(opt);
+                          if (!isLast) setTimeout(() => go(1, opt), 300);
+                        }}
                         style={{
                           background: isSel ? chipBgSel : chipBg,
                           border: `0.5px solid ${isSel ? chipBorderSel : chipBorder}`,
@@ -713,7 +693,7 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
               {/* Nav */}
               <div style={{
                 display: "flex",
-                justifyContent: "space-between",
+                justifyContent: step === QUESTIONS.length - 1 ? "space-between" : "flex-start",
                 alignItems: "center",
                 marginTop: "1.5rem",
               }}>
@@ -734,23 +714,25 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                   ← back
                 </button>
 
-                <button
-                  onClick={() => selected && go(1, selected)}
-                  style={{
-                    background: selected ? accent : "transparent",
-                    border: `0.5px solid ${selected ? accent : chipBorder}`,
-                    borderRadius: "24px",
-                    padding: "10px 28px",
-                    cursor: selected ? "pointer" : "default",
-                    fontFamily: SERIF,
-                    fontSize: "0.95rem",
-                    color: selected ? (dark ? "#0d0c0a" : "#fff") : fgMuted,
-                    letterSpacing: "0.04em",
-                    transition: "all 0.2s ease",
-                  }}
-                >
-                  {step === QUESTIONS.length - 1 ? "reveal" : "continue →"}
-                </button>
+                {step === QUESTIONS.length - 1 && (
+                  <button
+                    onClick={() => selected && go(1, selected)}
+                    style={{
+                      background: selected ? accent : "transparent",
+                      border: `0.5px solid ${selected ? accent : chipBorder}`,
+                      borderRadius: "24px",
+                      padding: "10px 28px",
+                      cursor: selected ? "pointer" : "default",
+                      fontFamily: SERIF,
+                      fontSize: "0.95rem",
+                      color: selected ? (dark ? "#0d0c0a" : "#fff") : fgMuted,
+                      letterSpacing: "0.04em",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    reveal
+                  </button>
+                )}
               </div>
             </div>
           )}
