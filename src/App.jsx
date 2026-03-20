@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 const QUESTIONS = [
   {
@@ -41,6 +41,13 @@ const loadFont = () => {
   }
 };
 
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning.";
+  if (h < 17) return "Good afternoon.";
+  return "Good evening.";
+}
+
 function loadEntries() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
   catch { return []; }
@@ -71,6 +78,13 @@ function formatDate(iso) {
   return d.toLocaleDateString("default", { weekday: "long", month: "long", day: "numeric" });
 }
 
+function isSameDay(isoA, isoB) {
+  const a = new Date(isoA), b = new Date(isoB);
+  return a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+}
+
 function useTypewriter(text, speed = 22) {
   const [displayed, setDisplayed] = useState("");
   const [done, setDone] = useState(false);
@@ -89,9 +103,39 @@ function useTypewriter(text, speed = 22) {
   return { displayed, done };
 }
 
+function CopyButton({ getText, accent, fgMuted, chipBorder, SERIF }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(getText()).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      style={{
+        background: "none",
+        border: `0.5px solid ${copied ? accent : chipBorder}`,
+        borderRadius: "14px",
+        padding: "3px 10px",
+        cursor: "pointer",
+        fontFamily: SERIF,
+        fontSize: "0.7rem",
+        color: copied ? accent : fgMuted,
+        letterSpacing: "0.04em",
+        transition: "all 0.2s ease",
+        flexShrink: 0,
+      }}
+    >
+      {copied ? "copied" : "copy"}
+    </button>
+  );
+}
+
 export default function App() {
   const [dark, setDark] = useState(true);
-  const [view, setView] = useState("quiz"); // "quiz" | "journal"
+  const [view, setView] = useState("quiz");
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState({});
   const [selected, setSelected] = useState(null);
@@ -125,7 +169,9 @@ export default function App() {
 
   const current = QUESTIONS[step];
 
-  const go = (dir, optionValue) => {
+  const todayEntry = entries.find(e => isSameDay(e.date, new Date().toISOString()));
+
+  const go = useCallback((dir, optionValue) => {
     if (animating) return;
     setAnimating(true);
     setDirection(dir);
@@ -145,7 +191,20 @@ export default function App() {
       }
       setAnimating(false);
     }, 260);
-  };
+  }, [animating, answers, current, step]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    if (view !== "quiz" || step >= RESULT_STEP) return;
+    const handler = (e) => {
+      if (e.key === "Enter" && selected) { e.preventDefault(); go(1, selected); }
+      if (e.key === "ArrowLeft" && step > 0) go(-1);
+      const num = parseInt(e.key);
+      if (num >= 1 && num <= current.options.length) setSelected(current.options[num - 1]);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [view, step, selected, current, go]);
 
   const fetchResult = async (ans) => {
     setStep(RESULT_STEP);
@@ -154,6 +213,7 @@ export default function App() {
     setError(null);
     setNote("");
     setNoteSaved(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
 
     const id = Date.now().toString();
     setCurrentEntryId(id);
@@ -225,6 +285,13 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
     setEntries(updated);
   };
 
+  const deleteEntry = (id) => {
+    const updated = entries.filter(e => e.id !== id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    setEntries(updated);
+    if (expandedId === id) setExpandedId(null);
+  };
+
   const reset = () => {
     setStep(0);
     setAnswers({});
@@ -266,6 +333,7 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
       transition: "background 0.4s, color 0.4s",
       display: "flex",
       flexDirection: "column",
+      position: "relative",
     }}>
       <style>{`
         @keyframes pulse{0%,100%{opacity:0.4}50%{opacity:1}}
@@ -275,6 +343,18 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
         textarea::placeholder { opacity: 0.5; }
       `}</style>
 
+      {/* Grain overlay — dark mode only */}
+      {dark && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          pointerEvents: "none",
+          zIndex: 999,
+          opacity: 0.038,
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E")`,
+        }} />
+      )}
+
       {/* Header */}
       <header style={{
         display: "grid",
@@ -283,10 +363,7 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
         padding: "1.5rem 2rem",
         borderBottom: `0.5px solid ${cardBorder}`,
       }}>
-        <div
-          onClick={() => { setView("quiz"); }}
-          style={{ cursor: "pointer" }}
-        >
+        <div onClick={() => setView("quiz")} style={{ cursor: "pointer" }}>
           <div style={{ fontSize: "1.2rem", fontWeight: 600, letterSpacing: "0.02em", color: fg }}>
             The Flesh is Weak
           </div>
@@ -306,10 +383,7 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
           >
             journal {entries.length > 0 ? `(${entries.length})` : ""}
           </button>
-          <button
-            onClick={() => setDark(!dark)}
-            style={btnStyle(false)}
-          >
+          <button onClick={() => setDark(!dark)} style={btnStyle(false)}>
             {dark ? "light" : "dark"}
           </button>
         </div>
@@ -338,8 +412,13 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
           boxSizing: "border-box",
         }}>
           {entries.length === 0 ? (
-            <div style={{ textAlign: "center", color: fgMuted, fontSize: "1.1rem", marginTop: "4rem" }}>
-              No entries yet. Complete a reflection to begin your journal.
+            <div style={{ textAlign: "center", marginTop: "5rem" }}>
+              <div style={{ fontSize: "1.1rem", color: fgMuted, marginBottom: "0.5rem" }}>
+                Your journal is empty.
+              </div>
+              <div style={{ fontSize: "0.88rem", color: fgMuted, opacity: 0.6 }}>
+                Complete a reflection to begin.
+              </div>
             </div>
           ) : (
             Object.entries(groupByMonth(entries)).map(([month, monthEntries]) => (
@@ -368,23 +447,24 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                           transition: "border-color 0.2s",
                         }}
                       >
-                        {/* Entry header — always visible */}
-                        <button
-                          onClick={() => setExpandedId(isOpen ? null : entry.id)}
-                          style={{
-                            width: "100%",
-                            background: "none",
-                            border: "none",
-                            padding: "1.1rem 1.5rem",
-                            cursor: "pointer",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            fontFamily: SERIF,
-                            textAlign: "left",
-                          }}
-                        >
-                          <div>
+                        {/* Entry header */}
+                        <div style={{
+                          display: "flex",
+                          alignItems: "center",
+                          padding: "1.1rem 1.5rem",
+                        }}>
+                          <button
+                            onClick={() => setExpandedId(isOpen ? null : entry.id)}
+                            style={{
+                              flex: 1,
+                              background: "none",
+                              border: "none",
+                              padding: 0,
+                              cursor: "pointer",
+                              fontFamily: SERIF,
+                              textAlign: "left",
+                            }}
+                          >
                             <div style={{ fontSize: "0.9rem", color: fg, marginBottom: "4px" }}>
                               {formatDate(entry.date)}
                             </div>
@@ -402,53 +482,49 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                                 </span>
                               ))}
                             </div>
+                          </button>
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginLeft: "1rem", flexShrink: 0 }}>
+                            <button
+                              onClick={() => {
+                                if (window.confirm("Delete this entry?")) deleteEntry(entry.id);
+                              }}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                color: fgMuted,
+                                opacity: 0.5,
+                                fontSize: "0.85rem",
+                                padding: "4px",
+                                fontFamily: SERIF,
+                                transition: "opacity 0.2s",
+                              }}
+                              onMouseEnter={e => e.target.style.opacity = 1}
+                              onMouseLeave={e => e.target.style.opacity = 0.5}
+                            >
+                              ✕
+                            </button>
+                            <span style={{ color: fgMuted, fontSize: "0.85rem" }}>
+                              {isOpen ? "↑" : "↓"}
+                            </span>
                           </div>
-                          <span style={{ color: fgMuted, fontSize: "0.85rem", marginLeft: "1rem", flexShrink: 0 }}>
-                            {isOpen ? "↑" : "↓"}
-                          </span>
-                        </button>
+                        </div>
 
-                        {/* Expanded entry content */}
+                        {/* Expanded content */}
                         {isOpen && (
                           <div style={{ padding: "0 1.5rem 1.5rem", animation: "fadeIn 0.3s ease" }}>
                             <div style={{ height: "0.5px", background: cardBorder, marginBottom: "1.25rem" }} />
 
-                            {/* Reference */}
-                            <div style={{
-                              fontSize: "0.72rem",
-                              letterSpacing: "0.14em",
-                              color: accent,
-                              textTransform: "uppercase",
-                              fontWeight: 500,
-                              marginBottom: "0.75rem",
-                            }}>
+                            <div style={{ fontSize: "0.72rem", letterSpacing: "0.14em", color: accent, textTransform: "uppercase", fontWeight: 500, marginBottom: "0.75rem" }}>
                               {entry.result.reference}
                             </div>
 
-                            {/* Verse */}
-                            <div style={{
-                              fontSize: "1.25rem",
-                              lineHeight: 1.7,
-                              color: fg,
-                              marginBottom: "1rem",
-                            }}>
+                            <div style={{ fontSize: "1.25rem", lineHeight: 1.7, color: fg, marginBottom: "1rem" }}>
                               "{entry.result.verse}"
                             </div>
 
-                            {/* Theologian */}
-                            <div style={{
-                              borderLeft: `2px solid ${accent}33`,
-                              paddingLeft: "1rem",
-                              marginBottom: "1rem",
-                            }}>
-                              <div style={{
-                                fontSize: "0.68rem",
-                                letterSpacing: "0.1em",
-                                textTransform: "uppercase",
-                                color: accent,
-                                fontWeight: 500,
-                                marginBottom: "0.4rem",
-                              }}>
+                            <div style={{ borderLeft: `2px solid ${accent}33`, paddingLeft: "1rem", marginBottom: "1rem" }}>
+                              <div style={{ fontSize: "0.68rem", letterSpacing: "0.1em", textTransform: "uppercase", color: accent, fontWeight: 500, marginBottom: "0.4rem" }}>
                                 {entry.result.theologian}
                               </div>
                               <div style={{ fontSize: "0.95rem", lineHeight: 1.6, color: fgMuted }}>
@@ -456,22 +532,8 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                               </div>
                             </div>
 
-                            {/* Prayer */}
-                            <div style={{
-                              background: prayerBg,
-                              border: `0.5px solid ${cardBorder}`,
-                              borderRadius: "10px",
-                              padding: "1.25rem 1.5rem",
-                              marginBottom: "1rem",
-                            }}>
-                              <div style={{
-                                fontSize: "0.68rem",
-                                letterSpacing: "0.1em",
-                                textTransform: "uppercase",
-                                color: accent,
-                                fontWeight: 500,
-                                marginBottom: "0.65rem",
-                              }}>
+                            <div style={{ background: prayerBg, border: `0.5px solid ${cardBorder}`, borderRadius: "10px", padding: "1.25rem 1.5rem", marginBottom: "1rem" }}>
+                              <div style={{ fontSize: "0.68rem", letterSpacing: "0.1em", textTransform: "uppercase", color: accent, fontWeight: 500, marginBottom: "0.65rem" }}>
                                 A prayer for you
                               </div>
                               <div style={{ fontSize: "1rem", lineHeight: 1.85, color: fg }}>
@@ -479,7 +541,6 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                               </div>
                             </div>
 
-                            {/* Note */}
                             <JournalNoteEditor
                               entry={entry}
                               dark={dark}
@@ -526,6 +587,40 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
               transform: animating ? `translateX(${direction * 24}px)` : "translateX(0)",
               transition: "opacity 0.25s ease, transform 0.25s ease",
             }}>
+
+              {/* Greeting + intro — step 0 only */}
+              {step === 0 && (
+                <div style={{ textAlign: "center", marginBottom: "1.75rem", animation: "fadeIn 0.5s ease" }}>
+                  <div style={{ fontSize: "1.1rem", color: fgMuted, marginBottom: "0.3rem" }}>
+                    {getGreeting()}
+                  </div>
+                  <div style={{ fontSize: "0.82rem", color: fgMuted, opacity: 0.6, letterSpacing: "0.04em" }}>
+                    Take a moment. Be honest.
+                  </div>
+                  {todayEntry && (
+                    <div style={{ marginTop: "0.85rem", fontSize: "0.8rem", color: fgMuted, opacity: 0.7 }}>
+                      You've already reflected today —{" "}
+                      <button
+                        onClick={() => { setView("journal"); setExpandedId(todayEntry.id); }}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          fontFamily: SERIF,
+                          fontSize: "0.8rem",
+                          color: accent,
+                          padding: 0,
+                          textDecoration: "underline",
+                          textUnderlineOffset: "2px",
+                        }}
+                      >
+                        view entry →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Step dots */}
               <div style={{ display: "flex", gap: "6px", justifyContent: "center", marginBottom: "2rem" }}>
                 {QUESTIONS.map((_, i) => (
@@ -559,7 +654,7 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                 </p>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                  {current.options.map((opt) => {
+                  {current.options.map((opt, i) => {
                     const isSel = selected === opt;
                     return (
                       <button
@@ -577,8 +672,20 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                           transition: "all 0.18s ease",
                           textAlign: "center",
                           letterSpacing: "0.01em",
+                          position: "relative",
                         }}
                       >
+                        <span style={{
+                          position: "absolute",
+                          top: "6px",
+                          left: "8px",
+                          fontSize: "0.6rem",
+                          color: isSel ? accent : fgMuted,
+                          opacity: 0.5,
+                          fontFamily: "monospace",
+                        }}>
+                          {i + 1}
+                        </span>
                         {opt}
                       </button>
                     );
@@ -678,14 +785,19 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                     boxShadow: dark ? "none" : "0 2px 24px rgba(0,0,0,0.06)",
                     textAlign: "left",
                   }}>
-                    <div style={{
-                      fontSize: "1.6rem",
-                      lineHeight: 1.7,
-                      color: fg,
-                      fontWeight: 400,
-                      minHeight: "56px",
-                    }}>
-                      "{verseText}{!verseDone && <span style={{ animation: "blink 1s step-end infinite" }}>|</span>}{verseDone && `"`}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
+                      <div style={{ fontSize: "1.6rem", lineHeight: 1.7, color: fg, fontWeight: 400, minHeight: "56px", flex: 1 }}>
+                        "{verseText}{!verseDone && <span style={{ animation: "blink 1s step-end infinite" }}>|</span>}{verseDone && `"`}
+                      </div>
+                      {verseDone && (
+                        <CopyButton
+                          getText={() => `${result.reference}\n"${result.verse}"`}
+                          accent={accent}
+                          fgMuted={fgMuted}
+                          chipBorder={chipBorder}
+                          SERIF={SERIF}
+                        />
+                      )}
                     </div>
                   </div>
 
@@ -700,21 +812,10 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                       textAlign: "left",
                       boxShadow: dark ? "none" : "0 2px 24px rgba(0,0,0,0.06)",
                     }}>
-                      <div style={{
-                        fontSize: "0.72rem",
-                        letterSpacing: "0.1em",
-                        textTransform: "uppercase",
-                        color: accent,
-                        marginBottom: "0.65rem",
-                        fontWeight: 500,
-                      }}>
+                      <div style={{ fontSize: "0.72rem", letterSpacing: "0.1em", textTransform: "uppercase", color: accent, marginBottom: "0.65rem", fontWeight: 500 }}>
                         {result.theologian}
                       </div>
-                      <div style={{
-                        fontSize: "1.05rem",
-                        lineHeight: 1.65,
-                        color: fgMuted,
-                      }}>
+                      <div style={{ fontSize: "1.05rem", lineHeight: 1.65, color: fgMuted }}>
                         "{quoteText}{!quoteDone && <span style={{ animation: "blink 1s step-end infinite" }}>|</span>}{quoteDone && `"`}
                       </div>
                     </div>
@@ -731,15 +832,19 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                       textAlign: "left",
                       boxShadow: dark ? "none" : "0 2px 24px rgba(0,0,0,0.06)",
                     }}>
-                      <div style={{
-                        fontSize: "0.72rem",
-                        letterSpacing: "0.1em",
-                        textTransform: "uppercase",
-                        color: accent,
-                        marginBottom: "1rem",
-                        fontWeight: 500,
-                      }}>
-                        A prayer for you
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                        <div style={{ fontSize: "0.72rem", letterSpacing: "0.1em", textTransform: "uppercase", color: accent, fontWeight: 500 }}>
+                          A prayer for you
+                        </div>
+                        {p3Done && (
+                          <CopyButton
+                            getText={() => result.prayerLines.join(" ")}
+                            accent={accent}
+                            fgMuted={fgMuted}
+                            chipBorder={chipBorder}
+                            SERIF={SERIF}
+                          />
+                        )}
                       </div>
                       <div style={{ fontSize: "1.3rem", lineHeight: 1.9, color: fg }}>
                         {prayer1}{!p1Done && <span style={{ animation: "blink 1s step-end infinite" }}>|</span>}
@@ -753,7 +858,7 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                     </div>
                   )}
 
-                  {/* Reflection note — appears after prayer finishes */}
+                  {/* Reflection note */}
                   {p3Done && (
                     <div style={{
                       background: cardBg,
@@ -765,14 +870,7 @@ The prayer must: be in first person, feel cadenced and literary, speak directly 
                       animation: "fadeIn 0.5s ease",
                       boxShadow: dark ? "none" : "0 2px 24px rgba(0,0,0,0.06)",
                     }}>
-                      <div style={{
-                        fontSize: "0.72rem",
-                        letterSpacing: "0.1em",
-                        textTransform: "uppercase",
-                        color: accent,
-                        fontWeight: 500,
-                        marginBottom: "0.85rem",
-                      }}>
+                      <div style={{ fontSize: "0.72rem", letterSpacing: "0.1em", textTransform: "uppercase", color: accent, fontWeight: 500, marginBottom: "0.85rem" }}>
                         Your reflection
                       </div>
                       <textarea
@@ -897,14 +995,7 @@ function JournalNoteEditor({ entry, dark, fg, fgMuted, cardBorder, accent, chipB
 
   return (
     <div style={{ marginTop: "0.5rem" }}>
-      <div style={{
-        fontSize: "0.68rem",
-        letterSpacing: "0.1em",
-        textTransform: "uppercase",
-        color: accent,
-        fontWeight: 500,
-        marginBottom: "0.6rem",
-      }}>
+      <div style={{ fontSize: "0.68rem", letterSpacing: "0.1em", textTransform: "uppercase", color: accent, fontWeight: 500, marginBottom: "0.6rem" }}>
         Reflection
       </div>
       <textarea
