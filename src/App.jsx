@@ -158,12 +158,20 @@ export default function App() {
     const id = Date.now().toString();
     setCurrentEntryId(id);
 
+    const books = ["Genesis", "Exodus", "Deuteronomy", "Joshua", "Ruth", "1 Samuel", "2 Samuel", "1 Kings", "Job", "Psalms", "Proverbs", "Ecclesiastes", "Song of Solomon", "Isaiah", "Jeremiah", "Lamentations", "Ezekiel", "Hosea", "Joel", "Jonah", "Micah", "Habakkuk", "Zephaniah", "Zechariah", "Matthew", "Mark", "Luke", "John", "Acts", "Romans", "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians", "Philippians", "Colossians", "1 Thessalonians", "1 Timothy", "2 Timothy", "Hebrews", "James", "1 Peter", "2 Peter", "1 John", "Revelation"];
+    const seed = Math.floor(Math.random() * 100000);
+    const suggestedBook = books[Math.floor(Math.random() * books.length)];
+
     const prompt = `A person is seeking spiritual guidance with this emotional profile:
 - Spirit feels: "${ans.spirit}"
 - Mind has been: "${ans.mind}"
 - Longing for: "${ans.heart}"
 - Faith has felt: "${ans.faith}"
 - Needs most from God: "${ans.need}"
+
+Randomization seed: ${seed}. Use this to ensure a fresh, unique selection every time.
+Strongly consider drawing the verse from this book (or a thematically nearby one): ${suggestedBook}.
+Avoid overused verses like John 3:16, Romans 8:28, Philippians 4:13, Jeremiah 29:11, or Psalm 23 unless they are genuinely the most fitting. Explore the full breadth of Scripture — the Psalms of lament, the prophets, the epistles, the Gospels, wisdom literature.
 
 Draw from the wisdom of theologians: John Piper, Tim Keller, Billy Graham, C.S. Lewis, Oswald Chambers, A.W. Tozer, Charles Spurgeon, D.L. Moody.
 
